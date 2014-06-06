@@ -154,6 +154,7 @@ void cleanup_module()
   remove_proc_entry(RESULT, NULL);
   printk(KERN_INFO "/proc/%s removed\n", PARENT_DIR);
 }
+
 module_init(init_module);
 module_exit(cleanup_module);
 MODULE_LICENSE("GPL");
