@@ -1,7 +1,16 @@
+#define SYSFS
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
+
+#ifdef SYSFS
+#include <linux/init.h>
+#include <linux/fs.h>
+#include <linux/slab.h>
+#else
 #include <linux/proc_fs.h>
+#endif
 
 // names
 #define ARG1 "arg1"
@@ -13,15 +22,11 @@
 
 
 #define WRITE_SIZE 100
+
 static char arg1_input[WRITE_SIZE];
 static char arg2_input[WRITE_SIZE];
 static char operation_input[WRITE_SIZE];
 
-struct proc_dir_entry *calc_dir;
-struct proc_dir_entry *arg1;
-struct proc_dir_entry *arg2;
-struct proc_dir_entry *operation;
-struct proc_dir_entry *result;
 
 //Calculate Function
 long calculate(void)
@@ -48,6 +53,83 @@ long calculate(void)
   }
   return res;
 }
+
+#ifdef SYSFS
+// description args
+//kernel obj attribute
+static struct attribute arg1 = {
+  .name = ARG1,
+  .mode = 0666,
+};
+//kernel obj attribute
+static struct attribute arg2 = {
+  .name = ARG2,
+  .mode = 0666,
+};
+//kernel obj attribute
+static struct attribute operation = {
+  .name = OPERATION,
+  .mode = 0666,
+};
+//kernel obj attribute
+static struct attribute result = {
+  .name = RESULT,
+  .mode = 0666,
+};
+//kernel obj attribute
+static struct attribute * calc_attributes[] = {
+  &arg1,
+  &arg2,
+  &operation,
+  &result,
+  NULL
+};
+
+
+static ssize_t default_show(struct kobject *kobj, struct attribute *attr, char *buf)
+{
+  if (!strcmp(attr->name, RESULT)) {
+    long res = calculate();
+    return sprintf(buf, "%ld\n", res);
+  } else {
+    return 0;
+  }
+}
+
+static ssize_t default_store(struct kobject *kobj, struct attribute *attr, const char *buf, size_t len)
+{
+  if (len > WRITE_SIZE) {
+    len = WRITE_SIZE;
+  }
+
+  if (!strcmp(attr->name, ARG1)) {
+    memcpy(arg1_input, buf, len);
+  } else if (!strcmp(attr->name, ARG2)) {
+    memcpy(arg2_input, buf, len);
+  } else if (!strcmp(attr->name, OPERATION)) {
+    memcpy(operation_input, buf, len);
+  }
+  return len;
+}
+
+static struct sysfs_ops calc_ops = {
+  .show = default_show,
+  .store = default_store,
+};
+
+static struct kobj_type calc_type = {
+  .sysfs_ops = &calc_ops,
+  .default_attrs = calc_attributes,
+};
+
+#else
+
+struct proc_dir_entry *calc_dir;
+struct proc_dir_entry *arg1;
+struct proc_dir_entry *arg2;
+struct proc_dir_entry *operation;
+struct proc_dir_entry *result;
+
 /*
 * arg1 write handler
 */
@@ -145,6 +227,7 @@ int init_module()
   return 0;
 }
 
+
 //delete all virtual files from proc filesystem
 void cleanup_module()
 {
@@ -154,8 +237,7 @@ void cleanup_module()
   remove_proc_entry(RESULT, NULL);
   printk(KERN_INFO "/proc/%s removed\n", PARENT_DIR);
 }
-
 module_init(init_module);
 module_exit(cleanup_module);
 MODULE_LICENSE("GPL");
-
+#endif
